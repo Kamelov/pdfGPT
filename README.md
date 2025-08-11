@@ -1,209 +1,203 @@
-# pdfGPT
-## Demo
-1. **Demo URL**: https://bhaskartripathi-pdfgpt-turbo.hf.space
-2. **Demo Video**:
-   
-   [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/LzPgmmqpBk8/0.jpg)](https://www.youtube.com/watch?v=LzPgmmqpBk8)
-#### Version Updates (27 July, 2023):
-1. Improved error handling
-2. PDF GPT now supports Turbo models and GPT4 including 16K and 32K token model.
-3. Pre-defined questions for auto-filling the input.
-4. Implemented Chat History feature.
-![image](https://github.com/bhaskatripathi/pdfGPT/assets/35177508/11549b24-9ed4-4dcb-a877-bad9c2266bf9)
+# 📄 PDF Chat Assistant
 
+Une application moderne pour discuter avec vos documents PDF en utilisant l'intelligence artificielle. Téléchargez un PDF et posez des questions sur son contenu - l'IA vous répondra en citant les sources précises !
 
-### Note on model performance
-```If you find the response for a specific question in the PDF is not good using Turbo models, then you need to understand that Turbo models such as gpt-3.5-turbo are chat completion models and will not give a good response in some cases where the embedding similarity is low. Despite the claim by OpenAI, the turbo model is not the best model for Q&A. In those specific cases, either use the good old text-DaVinci-003 or use GPT4 and above. These models invariably give you the most relevant output.```
+## ✨ Fonctionnalités
 
-# Upcoming Release Pipeline:
-1. Support for Falcon, Vicuna, Meta Llama
-2. OCR Support
-3. Multiple PDF file support
-4. OCR Support
-5. Node.Js based Web Application - With no trial, no API fees. 100% Open source.
-    
-### Problem Description : 
-1. When you pass a large text to Open AI, it suffers from a 4K token limit. It cannot take an entire pdf file as an input
-2. Open AI sometimes becomes overtly chatty and returns irrelevant response not directly related to your query. This is because Open AI uses poor embeddings.
-3. ChatGPT cannot directly talk to external data. Some solutions use Langchain but it is token hungry if not implemented correctly.
-4. There are a number of solutions like https://www.chatpdf.com, https://www.bespacific.com/chat-with-any-pdf, https://www.filechat.io they have poor content quality and are prone to hallucination problem. One good way to avoid hallucinations and improve truthfulness is to use improved embeddings. To solve this problem, I propose to improve embeddings with Universal Sentence Encoder family of algorithms (Read more here: https://tfhub.dev/google/collections/universal-sentence-encoder/1). 
+- 📁 **Upload de fichiers PDF** - Téléchargez directement vos documents
+- 🌐 **Support d'URL** - Chargez des PDF depuis internet via URL
+- 💬 **Chat interactif** - Interface de conversation intuitive
+- 🔍 **Recherche sémantique** - Trouve les passages les plus pertinents
+- 📚 **Citations précises** - Indique les pages sources des réponses
+- 🎨 **Interface moderne** - Design élégant avec Streamlit
+- 🚀 **API RESTful** - Backend FastAPI pour une intégration facile
 
-### Solution: What is PDF GPT ?
-1. PDF GPT allows you to chat with an uploaded PDF file using GPT functionalities.
-2. The application intelligently breaks the document into smaller chunks and employs a powerful Deep Averaging Network Encoder to generate embeddings.
-3. A semantic search is first performed on your pdf content and the most relevant embeddings are passed to the Open AI.
-4. A custom logic generates precise responses. The returned response can even cite the page number in square brackets([]) where the information is located, adding credibility to the responses and helping to locate pertinent information quickly. The Responses are much better than the naive responses by Open AI.
-5. Andrej Karpathy mentioned in this post that KNN algorithm is most appropriate for similar problems: https://twitter.com/karpathy/status/1647025230546886658
-6. Enables APIs on Production using **[langchain-serve](https://github.com/jina-ai/langchain-serve)**.
+## 🛠️ Technologies utilisées
 
-### Docker
-Run `docker-compose -f docker-compose.yaml up` to use it with Docker compose.
+- **Backend**: FastAPI, Python
+- **Frontend**: Streamlit
+- **IA**: OpenAI GPT-3.5-turbo
+- **Embeddings**: Sentence Transformers
+- **PDF**: PyMuPDF (fitz)
+- **Recherche**: Cosine similarity avec scikit-learn
 
+## 📦 Installation
 
-## Use `pdfGPT` on Production using [langchain-serve](https://github.com/jina-ai/langchain-serve)
-
-#### Local playground
-1. Run `lc-serve deploy local api` on one terminal to expose the app as API using langchain-serve.
-2. Run `python app.py` on another terminal for a local gradio playground.
-3. Open `http://localhost:7860` on your browser and interact with the app.
-
-
-#### Cloud deployment
-
-Make `pdfGPT` production ready by deploying it on [Jina Cloud](https://cloud.jina.ai/).
-
-`lc-serve deploy jcloud api` 
-
-<details>
-<summary>Show command output</summary>
-
-```text
-╭──────────────┬──────────────────────────────────────────────────────────────────────────────────────╮
-│ App ID       │                                 langchain-3ff4ab2c9d                                 │
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ Phase        │                                       Serving                                        │
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ Endpoint     │                      https://langchain-3ff4ab2c9d.wolf.jina.ai                       │
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ App logs     │                               dashboards.wolf.jina.ai                                │
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ Swagger UI   │                    https://langchain-3ff4ab2c9d.wolf.jina.ai/docs                    │
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ OpenAPI JSON │                https://langchain-3ff4ab2c9d.wolf.jina.ai/openapi.json                │
-╰──────────────┴──────────────────────────────────────────────────────────────────────────────────────╯
-```
-
-</details>
-
-#### Interact using cURL
-
-(Change the URL to your own endpoint)
-
-**PDF url**
+1. **Clonez le repository**:
 ```bash
-curl -X 'POST' \
-  'https://langchain-3ff4ab2c9d.wolf.jina.ai/ask_url' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "url": "https://uiic.co.in/sites/default/files/uploads/downloadcenter/Arogya%20Sanjeevani%20Policy%20CIS_2.pdf",
-  "question": "What'\''s the cap on room rent?",
-  "envs": {
-    "OPENAI_API_KEY": "'"${OPENAI_API_KEY}"'"
-    }
-}'
-
-{"result":" Room rent is subject to a maximum of INR 5,000 per day as specified in the Arogya Sanjeevani Policy [Page no. 1].","error":"","stdout":""}
+git clone <repository-url>
+cd pdf-chat-assistant
 ```
 
-**PDF file**
+2. **Installez les dépendances**:
 ```bash
-QPARAMS=$(echo -n 'input_data='$(echo -n '{"question": "What'\''s the cap on room rent?", "envs": {"OPENAI_API_KEY": "'"${OPENAI_API_KEY}"'"}}' | jq -s -R -r @uri))
-curl -X 'POST' \
-  'https://langchain-3ff4ab2c9d.wolf.jina.ai/ask_file?'"${QPARAMS}" \
-  -H 'accept: application/json' \
-  -H 'Content-Type: multipart/form-data' \
-  -F 'file=@Arogya_Sanjeevani_Policy_CIS_2.pdf;type=application/pdf'
-
-{"result":" Room rent is subject to a maximum of INR 5,000 per day as specified in the Arogya Sanjeevani Policy [Page no. 1].","error":"","stdout":""}
+pip install -r requirements.txt
 ```
 
-## Running on localhost
-### Credits : [Adithya S](https://github.com/200901002)
-1. Pull the image by entering the following command in your terminal or command prompt:
+3. **Configurez votre clé API OpenAI**:
 ```bash
-docker pull registry.hf.space/bhaskartripathi-pdfchatter:latest
-```
-2. Download the Universal Sentence Encoder locally to your project's root folder. This is important because otherwise, 915 MB will be downloaded at runtime everytime you run it.
-3. Download the encoder using this [link](https://tfhub.dev/google/universal-sentence-encoder/4?tf-hub-format=compressed).
-4. Extract the downloaded file and place it in your project's root folder as shown below:
-```text
-Root folder of your project
-└───Universal Sentence Encoder
-|   ├───assets
-|   └───variables
-|   └───saved_model.pb
-|
-└───app.py
-```
-5. If you have downloaded it locally, replace the code on line 68 in the API file:
-```python
-self.use = hub.load('https://tfhub.dev/google/universal-sentence-encoder/4')
-```
-with:
-```python
-self.use = hub.load('./Universal Sentence Encoder/')
-```
-6. Now, To run PDF-GPT, enter the following command:
+# Créez un fichier .env
+cp .env.example .env
 
+# Éditez le fichier .env et ajoutez votre clé API
+OPENAI_API_KEY=your_api_key_here
+```
+
+## 🚀 Démarrage rapide
+
+### Option 1: Script automatique (Recommandé)
 ```bash
-docker run -it -p 7860:7860 --platform=linux/amd64 registry.hf.space/bhaskartripathi-pdfchatter:latest python app.py
-```
-### **Original Source code with no integrations** (for demo hosted in Hugging Face) : 
-https://huggingface.co/spaces/bhaskartripathi/pdfGPT_Turbo
-
-
-## UML
-```mermaid
-sequenceDiagram
-    participant User
-    participant System
-
-    User->>System: Enter API Key
-    User->>System: Upload PDF/PDF URL
-    User->>System: Ask Question
-    User->>System: Submit Call to Action
-
-    System->>System: Blank field Validations
-    System->>System: Convert PDF to Text
-    System->>System: Decompose Text to Chunks (150 word length)
-    System->>System: Check if embeddings file exists
-    System->>System: If file exists, load embeddings and set the fitted attribute to True
-    System->>System: If file doesn't exist, generate embeddings, fit the recommender, save embeddings to file and set fitted attribute to True
-    System->>System: Perform Semantic Search and return Top 5 Chunks with KNN
-    System->>System: Load Open AI prompt
-    System->>System: Embed Top 5 Chunks in Open AI Prompt
-    System->>System: Generate Answer with Davinci
-
-    System-->>User: Return Answer
+python start_app.py
 ```
 
-### Flowchart
-```mermaid
-flowchart TB
-A[Input] --> B[URL]
-A -- Upload File manually --> C[Parse PDF]
-B --> D[Parse PDF] -- Preprocess --> E[Dynamic Text Chunks]
-C -- Preprocess --> E[Dynamic Text Chunks with citation history]
-E --Fit-->F[Generate text embedding with Deep Averaging Network Encoder on each chunk]
-F -- Query --> G[Get Top Results]
-G -- K-Nearest Neighbour --> K[Get Nearest Neighbour - matching citation references]
-K -- Generate Prompt --> H[Generate Answer]
-H -- Output --> I[Output]
+### Option 2: Démarrage manuel
+
+**Terminal 1 - API Backend**:
+```bash
+uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 ```
-## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=bhaskatripathi/pdfGPT&type=Date)](https://star-history.com/#bhaskatripathi/pdfGPT&Date)
-I am looking for more contributors from the open source community who can take up backlog items voluntarily and maintain the application jointly with me.
+**Terminal 2 - Interface utilisateur**:
+```bash
+streamlit run app.py --server.port 8501
+```
 
-## Also Try PyViralContent:
-Have you ever thought why your social media posts, blog, article, advertising, YouTube video, or other content don't go viral?
-I have published a new Python Package: pyviralcontent ! 🚀
-It predicts the virality of your content along with readability scores! It uses multiple sophisticated algorithms to calculate your content's readability score and its predict its viral probability using Multi Criteria Decision Analysis. 📈 Make your content strategy data-driven with pyviralcontent. Try it out and take your content's impact to the next level! 💥 
-https://github.com/bhaskatripathi/pyviralcontent
+## 🖥️ Accès à l'application
 
-## License
-This project is licensed under the MIT License. See the [LICENSE.txt](LICENSE.txt) file for details.
+- **Interface utilisateur**: http://localhost:8501
+- **API Documentation**: http://localhost:8000/docs
+- **API Health Check**: http://localhost:8000/status
 
-## Citation
-If you use PDF-GPT in your research or wish to refer to the examples in this repo, please cite with:
+## 📱 Utilisation
 
-```bibtex
-@misc{pdfgpt2023,
-  author = {Bhaskar Tripathi},
-  title = {PDF-GPT},
-  year = {2023},
-  publisher = {GitHub},
-  journal = {GitHub Repository},
-  howpublished = {\url{https://github.com/bhaskatripathi/pdfGPT}}
+1. **Configurez votre clé API** dans la barre latérale
+2. **Téléchargez un PDF** (fichier local ou URL)
+3. **Attendez le traitement** (création des embeddings)
+4. **Posez vos questions** dans l'interface de chat
+5. **Recevez des réponses** avec citations des pages sources
+
+### Exemples de questions
+- "Résumez ce document"
+- "Quels sont les points principaux ?"
+- "Y a-t-il des recommandations ?"
+- "Expliquez [concept spécifique] en détail"
+
+## 🔧 API Endpoints
+
+### Upload d'un PDF
+```bash
+POST /upload-pdf
+Content-Type: multipart/form-data
+Body: file (PDF)
+```
+
+### Upload depuis URL
+```bash
+POST /upload-pdf-url?url=https://example.com/document.pdf
+```
+
+### Chat avec le PDF
+```bash
+POST /chat
+Content-Type: application/json
+Body: {
+  "question": "Votre question",
+  "openai_key": "votre_clé_api" (optionnel)
 }
+```
+
+### Vérifier le statut
+```bash
+GET /status
+```
+
+## 🐳 Docker
+
+```bash
+# Construire l'image
+docker build -t pdf-chat-assistant .
+
+# Lancer le conteneur
+docker run -p 8000:8000 -p 8501:8501 -e OPENAI_API_KEY=your_key pdf-chat-assistant
+```
+
+Ou avec docker-compose:
+```bash
+docker-compose up
+```
+
+## 🔐 Configuration
+
+### Variables d'environnement
+
+| Variable | Description | Requis |
+|----------|-------------|--------|
+| `OPENAI_API_KEY` | Clé API OpenAI | Oui* |
+| `API_HOST` | Host de l'API | Non (défaut: localhost) |
+| `API_PORT` | Port de l'API | Non (défaut: 8000) |
+| `STREAMLIT_PORT` | Port Streamlit | Non (défaut: 8501) |
+
+*Peut être configuré dans l'interface
+
+### Obtenir une clé API OpenAI
+
+1. Visitez [OpenAI Platform](https://platform.openai.com/account/api-keys)
+2. Créez un compte ou connectez-vous
+3. Générez une nouvelle clé API
+4. Copiez la clé dans votre fichier `.env` ou l'interface
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐    HTTP     ┌─────────────────┐
+│   Streamlit     │──────────▶  │   FastAPI       │
+│   Frontend      │             │   Backend       │
+│   (Port 8501)   │◀────────────│   (Port 8000)   │
+└─────────────────┘   JSON      └─────────────────┘
+                                          │
+                                          ▼
+┌─────────────────┐             ┌─────────────────┐
+│   Sentence      │             │   OpenAI API    │
+│   Transformers  │             │   GPT-3.5       │
+│   (Embeddings)  │             │   (Génération)  │
+└─────────────────┘             └─────────────────┘
+```
+
+## 🤝 Contribution
+
+1. Fork le projet
+2. Créez une branche feature (`git checkout -b feature/AmazingFeature`)
+3. Commit vos changes (`git commit -m 'Add AmazingFeature'`)
+4. Push vers la branche (`git push origin feature/AmazingFeature`)
+5. Ouvrez une Pull Request
+
+## 📝 Licence
+
+Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+
+## 🐛 Support
+
+Si vous rencontrez des problèmes:
+
+1. Vérifiez que toutes les dépendances sont installées
+2. Assurez-vous que votre clé API OpenAI est valide
+3. Consultez les logs pour les erreurs détaillées
+4. Ouvrez une issue sur GitHub
+
+## 🔮 Roadmap
+
+- [ ] Support de plus de formats (Word, PowerPoint)
+- [ ] Historique des conversations persistant
+- [ ] Support de modèles LLM alternatifs
+- [ ] Amélioration de l'interface mobile
+- [ ] Export des conversations
+- [ ] Support multilingue
+- [ ] Intégration avec des bases de données vectorielles
+
+## ⭐ Remerciements
+
+- OpenAI pour l'API GPT
+- Sentence Transformers pour les embeddings
+- Streamlit pour l'interface utilisateur
+- FastAPI pour le backend
+- PyMuPDF pour le traitement PDF
