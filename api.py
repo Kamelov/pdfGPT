@@ -4,28 +4,55 @@ import shutil
 import urllib.request
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from litellm import completion
+from typing import List, Optional
 import fitz
 import numpy as np
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 import openai
-import tensorflow_hub as hub
-from fastapi import UploadFile
-from lcserve import serving
-from sklearn.neighbors import NearestNeighbors
+from dotenv import load_dotenv
 
+load_dotenv()
 
-recommender = None
+app = FastAPI(title="PDF Chat API", description="API pour discuter avec des documents PDF")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Modèles globaux
+sentence_model = None
+document_chunks = []
+chunk_embeddings = None
+
+class ChatRequest(BaseModel):
+    question: str
+    openai_key: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: List[str]
+
+def get_sentence_model():
+    global sentence_model
+    if sentence_model is None:
+        sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return sentence_model
 
 def download_pdf(url, output_path):
     urllib.request.urlretrieve(url, output_path)
-
 
 def preprocess(text):
     text = text.replace('\n', ' ')
     text = re.sub('\s+', ' ', text)
     return text
-
 
 def pdf_to_text(path, start_page=1, end_page=None):
     doc = fitz.open(path)
@@ -44,7 +71,6 @@ def pdf_to_text(path, start_page=1, end_page=None):
     doc.close()
     return text_list
 
-
 def text_to_chunks(texts, word_length=150, start_page=1):
     text_toks = [t.split(' ') for t in texts]
     chunks = []
@@ -60,120 +86,150 @@ def text_to_chunks(texts, word_length=150, start_page=1):
                 text_toks[idx + 1] = chunk + text_toks[idx + 1]
                 continue
             chunk = ' '.join(chunk).strip()
-            chunk = f'[Page no. {idx+start_page}]' + ' ' + '"' + chunk + '"'
-            chunks.append(chunk)
+            chunk_with_page = f'[Page {idx+start_page}] {chunk}'
+            chunks.append(chunk_with_page)
     return chunks
 
+def find_relevant_chunks(question: str, top_k: int = 5) -> List[str]:
+    global document_chunks, chunk_embeddings
+    
+    if not document_chunks or chunk_embeddings is None:
+        return []
+    
+    model = get_sentence_model()
+    question_embedding = model.encode([question])
+    
+    # Calculer la similarité cosinus
+    similarities = cosine_similarity(question_embedding, chunk_embeddings)[0]
+    
+    # Obtenir les indices des chunks les plus similaires
+    top_indices = np.argsort(similarities)[-top_k:][::-1]
+    
+    return [document_chunks[i] for i in top_indices if similarities[i] > 0.1]
 
-class SemanticSearch:
-    def __init__(self):
-        self.use = hub.load('https://tfhub.dev/google/universal-sentence-encoder/4')
-        self.fitted = False
+def generate_answer_with_openai(question: str, relevant_chunks: List[str], api_key: str) -> str:
+    if not relevant_chunks:
+        return "Je n'ai pas trouvé d'informations pertinentes dans le document pour répondre à votre question."
+    
+    context = "\n\n".join(relevant_chunks)
+    
+    prompt = f"""Basé sur le contexte suivant extrait d'un document PDF, répondez à la question de manière précise et concise. 
+Citez les numéros de page entre crochets [] quand c'est pertinent.
 
-    def fit(self, data, batch=1000, n_neighbors=5):
-        self.data = data
-        self.embeddings = self.get_text_embedding(data, batch=batch)
-        n_neighbors = min(n_neighbors, len(self.embeddings))
-        self.nn = NearestNeighbors(n_neighbors=n_neighbors)
-        self.nn.fit(self.embeddings)
-        self.fitted = True
+Contexte:
+{context}
 
-    def __call__(self, text, return_data=True):
-        inp_emb = self.use([text])
-        neighbors = self.nn.kneighbors(inp_emb, return_distance=False)[0]
+Question: {question}
 
-        if return_data:
-            return [self.data[i] for i in neighbors]
-        else:
-            return neighbors
+Réponse:"""
 
-    def get_text_embedding(self, texts, batch=1000):
-        embeddings = []
-        for i in range(0, len(texts), batch):
-            text_batch = texts[i : (i + batch)]
-            emb_batch = self.use(text_batch)
-            embeddings.append(emb_batch)
-        embeddings = np.vstack(embeddings)
-        return embeddings
-
-
-def load_recommender(path, start_page=1):
-    global recommender
-    if recommender is None:
-        recommender = SemanticSearch()
-
-    texts = pdf_to_text(path, start_page=start_page)
-    chunks = text_to_chunks(texts, start_page=start_page)
-    recommender.fit(chunks)
-    return 'Corpus Loaded.'
-
-
-def generate_text(openAI_key, prompt, engine="text-davinci-003"):
-    # openai.api_key = openAI_key
     try:
-        messages=[{ "content": prompt,"role": "user"}]
-        completions = completion(
-            model=engine,
-            messages=messages,
-            max_tokens=512,
-            n=1,
-            stop=None,
-            temperature=0.7,
-            api_key=openAI_key
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,
+            temperature=0.7
         )
-        message = completions['choices'][0]['message']['content']
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        message = f'API Error: {str(e)}'
-    return message 
+        return f"Erreur avec l'API OpenAI: {str(e)}"
 
-
-def generate_answer(question, openAI_key):
-    topn_chunks = recommender(question)
-    prompt = ""
-    prompt += 'search results:\n\n'
-    for c in topn_chunks:
-        prompt += c + '\n\n'
-
-    prompt += (
-        "Instructions: Compose a comprehensive reply to the query using the search results given. "
-        "Cite each reference using [ Page Number] notation (every result has this number at the beginning). "
-        "Citation should be done at the end of each sentence. If the search results mention multiple subjects "
-        "with the same name, create separate answers for each. Only include information found in the results and "
-        "don't add any additional information. Make sure the answer is correct and don't output false content. "
-        "If the text does not relate to the query, simply state 'Text Not Found in PDF'. Ignore outlier "
-        "search results which has nothing to do with the question. Only answer what is asked. The "
-        "answer should be short and concise. Answer step-by-step. \n\nQuery: {question}\nAnswer: "
-    )
-
-    prompt += f"Query: {question}\nAnswer:"
-    answer = generate_text(openAI_key, prompt, "text-davinci-003")
-    return answer
-
-
-def load_openai_key() -> str:
-    key = os.environ.get("OPENAI_API_KEY")
-    if key is None:
-        raise ValueError(
-            "[ERROR]: Please pass your OPENAI_API_KEY. Get your key here : https://platform.openai.com/account/api-keys"
-        )
-    return key
-
-
-@serving
-def ask_url(url: str, question: str):
-    download_pdf(url, 'corpus.pdf')
-    load_recommender('corpus.pdf')
-    openAI_key = load_openai_key()
-    return generate_answer(question, openAI_key)
-
-
-@serving
-async def ask_file(file: UploadFile, question: str) -> str:
+@app.post("/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    global document_chunks, chunk_embeddings
+    
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Le fichier doit être un PDF")
+    
+    # Sauvegarder le fichier temporairement
     suffix = Path(file.filename).suffix
     with NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = Path(tmp.name)
+    
+    try:
+        # Extraire le texte du PDF
+        texts = pdf_to_text(str(tmp_path))
+        document_chunks = text_to_chunks(texts)
+        
+        # Créer les embeddings
+        model = get_sentence_model()
+        chunk_embeddings = model.encode(document_chunks)
+        
+        return {
+            "message": f"PDF '{file.filename}' traité avec succès. {len(document_chunks)} chunks créés.",
+            "chunks_count": len(document_chunks)
+        }
+    
+    finally:
+        # Nettoyer le fichier temporaire
+        tmp_path.unlink()
 
-    load_recommender(str(tmp_path))
-    openAI_key = load_openai_key()
-    return generate_answer(question, openAI_key)
+@app.post("/upload-pdf-url")
+async def upload_pdf_url(url: str):
+    global document_chunks, chunk_embeddings
+    
+    try:
+        # Télécharger le PDF
+        download_pdf(url, 'temp_pdf.pdf')
+        
+        # Extraire le texte du PDF
+        texts = pdf_to_text('temp_pdf.pdf')
+        document_chunks = text_to_chunks(texts)
+        
+        # Créer les embeddings
+        model = get_sentence_model()
+        chunk_embeddings = model.encode(document_chunks)
+        
+        return {
+            "message": f"PDF téléchargé et traité avec succès. {len(document_chunks)} chunks créés.",
+            "chunks_count": len(document_chunks)
+        }
+    
+    finally:
+        # Nettoyer le fichier temporaire
+        if os.path.exists('temp_pdf.pdf'):
+            os.remove('temp_pdf.pdf')
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_with_pdf(request: ChatRequest):
+    if not document_chunks:
+        raise HTTPException(status_code=400, detail="Aucun PDF n'a été téléchargé. Veuillez d'abord télécharger un PDF.")
+    
+    # Obtenir la clé API OpenAI
+    api_key = request.openai_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Clé API OpenAI requise")
+    
+    # Trouver les chunks pertinents
+    relevant_chunks = find_relevant_chunks(request.question)
+    
+    # Générer la réponse
+    answer = generate_answer_with_openai(request.question, relevant_chunks, api_key)
+    
+    # Extraire les sources (numéros de page)
+    sources = []
+    for chunk in relevant_chunks:
+        if '[Page' in chunk:
+            page_info = chunk.split(']')[0] + ']'
+            if page_info not in sources:
+                sources.append(page_info)
+    
+    return ChatResponse(answer=answer, sources=sources)
+
+@app.get("/status")
+async def get_status():
+    return {
+        "chunks_loaded": len(document_chunks),
+        "embeddings_created": chunk_embeddings is not None,
+        "model_loaded": sentence_model is not None
+    }
+
+@app.get("/")
+async def root():
+    return {"message": "API PDF Chat - Téléchargez un PDF et posez vos questions!"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
